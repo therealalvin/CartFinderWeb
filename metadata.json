@@ -1,0 +1,8 @@
+{
+  "name": "CartFinder",
+  "description": "Locate where you parked your golf cart with high-precision GPS tracking, interactive map guidance, compass bearing, and one-tap spot clearing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

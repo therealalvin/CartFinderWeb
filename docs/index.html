@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CartFinder - Golf Cart GPS</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#134e26">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CartFinder">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Find where you parked your golf cart with high-precision GPS, interactive map, and compass navigation.">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- App Container -->
+  <div id="app" class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="app-bar">
+      <div class="brand">
+        <div class="brand-icon">
+          <span class="material-symbols-outlined">sports_golf</span>
+        </div>
+        <div class="brand-text">
+          <h1>CartFinder</h1>
+          <span class="badge-status" id="gps-status-badge">
+            <span class="status-dot pulsing"></span>
+            <span id="gps-status-text">Acquiring GPS...</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Units Toggle Pill -->
+        <button id="unit-toggle-btn" class="pill-btn" title="Toggle Distance Unit">
+          <span id="unit-label">Yards</span>
+        </button>
+
+        <!-- Map Layer Toggle -->
+        <button id="layer-toggle-btn" class="icon-btn" title="Toggle Satellite/Course Map">
+          <span class="material-symbols-outlined" id="layer-icon">satellite_alt</span>
+        </button>
+
+        <!-- More / Options -->
+        <button id="menu-btn" class="icon-btn" title="Menu & History">
+          <span class="material-symbols-outlined">more_vert</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Simulation Bar (shown if Demo mode is active) -->
+    <div id="demo-banner" class="demo-banner hidden">
+      <span class="material-symbols-outlined">science</span>
+      <span>Demo Mode: Simulating GPS course navigation</span>
+      <button id="exit-demo-btn" class="mini-btn">Exit</button>
+    </div>
+
+    <!-- Main Content Area: Map & Overlay HUD -->
+    <main class="main-content">
+      <!-- Leaflet Map Container -->
+      <div id="map" class="map-view"></div>
+
+      <!-- Quick Map Action Floating Buttons -->
+      <div class="map-quick-actions">
+        <button id="recenter-user-btn" class="floating-circle-btn" title="Center on My Location">
+          <span class="material-symbols-outlined">my_location</span>
+        </button>
+        <button id="recenter-cart-btn" class="floating-circle-btn" title="Center on Golf Cart">
+          <span class="material-symbols-outlined">golf_course</span>
+        </button>
+        <button id="fit-bounds-btn" class="floating-circle-btn" title="View Both Cart and Me">
+          <span class="material-symbols-outlined">fit_screen</span>
+        </button>
+      </div>
+
+      <!-- Floating Compass & Navigation HUD (Visible when cart is parked) -->
+      <section id="nav-hud" class="nav-hud card hidden">
+        <div class="hud-top">
+          <div class="hud-distance-block">
+            <span class="hud-label">DISTANCE TO CART</span>
+            <div class="hud-distance-row">
+              <span id="hud-distance-val" class="hud-distance-number">--</span>
+              <span id="hud-distance-unit" class="hud-distance-unit">yd</span>
+            </div>
+            <span id="hud-accuracy-caption" class="hud-subtext">GPS accuracy: ±--</span>
+          </div>
+
+          <!-- Compass Rose Indicator with Rotating Arrow -->
+          <div class="hud-compass-wrap">
+            <div id="compass-rose" class="compass-rose">
+              <div class="compass-marks">
+                <span class="mark n">N</span>
+                <span class="mark e">E</span>
+                <span class="mark s">S</span>
+                <span class="mark w">W</span>
+              </div>
+              <div id="compass-needle" class="compass-needle">
+                <div class="needle-tip">
+                  <span class="material-symbols-outlined">navigation</span>
+                </div>
+              </div>
+            </div>
+            <div class="bearing-caption">
+              <span id="hud-bearing-text">--°</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-guidance">
+          <span class="material-symbols-outlined" id="direction-arrow-icon">straight</span>
+          <span id="hud-guidance-text">Follow the arrow to your golf cart</span>
+        </div>
+
+        <!-- External Maps Button Group -->
+        <div class="hud-external-nav">
+          <a id="ext-map-link" href="#" target="_blank" rel="noopener" class="ext-nav-btn">
+            <span class="material-symbols-outlined">directions_walk</span>
+            <span id="ext-map-text">Open in Maps</span>
+          </a>
+        </div>
+      </section>
+
+      <!-- Arrival Card (Shown when < 12 yards away) -->
+      <div id="arrival-card" class="arrival-card card hidden">
+        <div class="arrival-content">
+          <div class="arrival-icon-wrap">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <div class="arrival-text">
+            <h3>You've Reached Your Cart!</h3>
+            <p id="arrival-spot-name">Parked at Clubhouse</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Card: Park Status & Action Bar -->
+      <section class="bottom-card">
+        <div id="parked-info-view" class="parked-info hidden">
+          <div class="parked-meta">
+            <div class="cart-avatar">
+              <span class="material-symbols-outlined">sports_golf</span>
+            </div>
+            <div class="parked-details">
+              <div class="spot-title-row">
+                <h2 id="parked-spot-label">Cart #1</h2>
+                <span id="parked-time-ago" class="time-ago">Just now</span>
+              </div>
+              <p id="parked-note" class="parked-note">No notes added</p>
+            </div>
+          </div>
+
+          <div class="parked-actions-row">
+            <button id="clear-spot-btn" class="action-btn outline danger">
+              <span class="material-symbols-outlined">delete</span>
+              <span>Clear Spot</span>
+            </button>
+            <button id="update-spot-btn" class="action-btn secondary">
+              <span class="material-symbols-outlined">edit</span>
+              <span>Edit Details</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- When NO cart is parked -->
+        <div id="not-parked-view" class="not-parked-info">
+          <div class="prompt-text">
+            <h2>Ready to play?</h2>
+            <p>Park your cart here so you can easily find it after your round, at the turn, or on the range.</p>
+          </div>
+          <button id="park-cart-btn" class="primary-big-btn">
+            <span class="material-symbols-outlined">pin_drop</span>
+            <span>Park Cart Here</span>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Park Cart Dialog -->
+    <div id="park-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Park Golf Cart</h3>
+          <button id="close-modal-btn" class="icon-btn">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <label class="form-label" for="spot-name-input">Spot / Cart Label</label>
+          <input type="text" id="spot-name-input" class="form-input" placeholder="e.g. Cart #24 or Clubhouse" maxlength="30">
+
+          <div class="quick-tags-label">Quick Suggestions:</div>
+          <div class="quick-tags">
+            <button type="button" class="tag-chip">Clubhouse</button>
+            <button type="button" class="tag-chip">Hole 1 Tee</button>
+            <button type="button" class="tag-chip">Hole 9 Turn</button>
+            <button type="button" class="tag-chip">Hole 18 Green</button>
+            <button type="button" class="tag-chip">Driving Range</button>
+            <button type="button" class="tag-chip">Cart Barn</button>
+          </div>
+
+          <label class="form-label" for="spot-note-input" style="margin-top: 14px;">Notes (optional)</label>
+          <textarea id="spot-note-input" class="form-textarea" placeholder="e.g. Parked by the big oak tree, blue bag on back" rows="2"></textarea>
+
+          <div class="gps-lock-preview">
+            <span class="material-symbols-outlined">gps_fixed</span>
+            <span id="modal-gps-coord">Capturing high-precision GPS...</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="cancel-park-btn" class="action-btn outline">Cancel</button>
+          <button id="save-park-btn" class="action-btn primary">Save Location</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Menu / Settings / History -->
+    <div id="menu-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Options & History</h3>
+          <button id="close-menu-btn" class="icon-btn">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="menu-section">
+            <h4>Distance Units</h4>
+            <div class="unit-selector-group">
+              <button class="unit-opt-btn" data-unit="Yards">Yards</button>
+              <button class="unit-opt-btn" data-unit="Meters">Meters</button>
+              <button class="unit-opt-btn" data-unit="Feet">Feet</button>
+            </div>
+          </div>
+
+          <div class="menu-section">
+            <h4>Compass & Sensors</h4>
+            <button id="enable-compass-btn" class="menu-action-btn">
+              <span class="material-symbols-outlined">explore</span>
+              <div class="btn-text-col">
+                <strong>Calibrate / Enable Compass</strong>
+                <small>Required on iOS Safari to unlock live needle</small>
+              </div>
+            </button>
+          </div>
+
+          <div class="menu-section">
+            <h4>Demo & Testing</h4>
+            <button id="toggle-demo-btn" class="menu-action-btn">
+              <span class="material-symbols-outlined">sports_esports</span>
+              <div class="btn-text-col">
+                <strong id="demo-toggle-title">Start Demo Simulation</strong>
+                <small>Test navigation & arrival indoors</small>
+              </div>
+            </button>
+          </div>
+
+          <div class="menu-section">
+            <h4>Recent Parked History</h4>
+            <div id="history-list" class="history-list">
+              <p class="empty-hint">No past parked spots yet.</p>
+            </div>
+          </div>
+
+          <div class="menu-section">
+            <h4>Add to Phone Home Screen</h4>
+            <p class="hint-text">
+              <strong>iPhone (iOS Safari):</strong> Tap the <strong>Share</strong> button <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">ios_share</span> and select <strong>"Add to Home Screen"</strong>.<br>
+              <strong>Android (Chrome):</strong> Tap the <strong>Three Dots ⋮</strong> menu and tap <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+      <span id="toast-text">Toast message</span>
+    </div>
+  </div>
+
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Application JS -->
+  <script src="app.js"></script>
+</body>
+</html>
