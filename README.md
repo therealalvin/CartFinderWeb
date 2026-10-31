@@ -4,23 +4,13 @@
 
 ---
 
-## 🚀 How to Deploy to GitHub Pages (Step-by-Step)
+## 🚀 How to get to the application on your phone
 
-### Step 1: Push / Export to GitHub
-1. In AI Studio, click the **Settings / Export** menu (top right) and select **Export to GitHub** (or push your repository to your GitHub account).
+### Step 1: Open your web browser
+1. On your device, open your default web browser (Safari, Chrome, etc)
 
-### Step 2: Enable GitHub Pages in Repository Settings
-1. Open your repository on **GitHub.com**.
-2. Click on the **Settings** tab at the top of your repository.
-3. In the left sidebar, click on **Pages** (under the "Code and automation" section).
-4. Under **Build and deployment**:
-   - **Source**: Select **Deploy from a branch**.
-   - **Branch**: Select `main` (or `master`).
-   - **Folder**: Select either `/(root)` or `/docs` (both are fully supported and pre-configured).
-   - Click **Save**.
-5. Wait about 30–60 seconds for GitHub to finish building. GitHub Pages will display your live URL (e.g., `https://<your-username>.github.io/<repo-name>/`).
-
-*(Note: We have also included `.github/workflows/deploy.yml` in case you prefer GitHub Actions automated deployment).*
+### Step 2: Navigate to the page
+1. Navigate to https://therealalvin.github.io/CartFinderWeb/
 
 ---
 
