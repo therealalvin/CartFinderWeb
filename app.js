@@ -1,6 +1,11 @@
 /**
  * CartFinder Web App - Progressive Web App for Golf Cart GPS & Compass Guidance
  * Works on iPhone (iOS Safari), Android (Chrome), and Desktop
+ * 
+ * Storage behavior:
+ * - Never saves a history or log of past locations.
+ * - Only stores the single current parked location in case the user quits the browser or reboots the phone.
+ * - Automatically forgets and clears the location the moment the user returns to the cart.
  */
 
 // --- Application State ---
@@ -14,9 +19,14 @@ const state = {
   isDemoMode: false,
   demoTimer: null,
   hasArrived: false,
-  watchId: null,
-  history: JSON.parse(localStorage.getItem('cartfinder_history') || '[]')
+  autoForgetTimer: null,
+  watchId: null
 };
+
+// Purge any legacy history to ensure strict zero-tracking compliance
+try {
+  localStorage.removeItem('cartfinder_history');
+} catch (e) {}
 
 // Audio Context for Arrival Chime (synthesized, zero external audio dependency)
 let audioCtx = null;
@@ -55,6 +65,7 @@ const el = {
   extMapText: document.getElementById('ext-map-text'),
   arrivalCard: document.getElementById('arrival-card'),
   arrivalSpotName: document.getElementById('arrival-spot-name'),
+  dismissArrivalBtn: document.getElementById('dismiss-arrival-btn'),
   parkedInfoView: document.getElementById('parked-info-view'),
   notParkedView: document.getElementById('not-parked-view'),
   parkCartBtn: document.getElementById('park-cart-btn'),
@@ -76,7 +87,6 @@ const el = {
   enableCompassBtn: document.getElementById('enable-compass-btn'),
   toggleDemoBtn: document.getElementById('toggle-demo-btn'),
   demoToggleTitle: document.getElementById('demo-toggle-title'),
-  historyList: document.getElementById('history-list'),
   toast: document.getElementById('toast'),
   toastText: document.getElementById('toast-text')
 };
@@ -236,14 +246,10 @@ function updateGpsBadge(isActive, text) {
 
 // --- Compass & Device Orientation ---
 function initCompassListener() {
-  // Support both standard DeviceOrientation and WebKit Compass
   if (window.DeviceOrientationEvent) {
-    // Check if iOS 13+ permission is required
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // Permission will be triggered by user gesture
       el.enableCompassBtn.classList.remove('hidden');
     } else {
-      // Standard Android / Chrome / Mobile listener
       window.addEventListener('deviceorientationabsolute', handleOrientation, true);
       window.addEventListener('deviceorientation', handleOrientation, true);
       state.isCompassActive = true;
@@ -337,7 +343,7 @@ function updateNavigation() {
   updateExternalNavLinks(cart.lat, cart.lng);
 
   // Check Arrival (<= 10 meters / ~11 yards)
-  if (distMeters <= 10) {
+  if (distMeters <= 10.0) {
     triggerArrival();
   } else {
     hideArrival();
@@ -442,23 +448,35 @@ function formatDistance(meters) {
   }
 }
 
-// --- Arrival Detection, Haptics & Audio Chime ---
+// --- Arrival Detection, Auto-Forget & Audio Chime ---
 function triggerArrival() {
   if (state.hasArrived) return;
   state.hasArrived = true;
 
-  el.arrivalSpotName.textContent = `Parked at ${state.parkedLocation.spotLabel || 'Golf Cart'}`;
+  // Immediately delete the stored location from localStorage so it's forgotten upon arrival
+  try {
+    localStorage.removeItem('cartfinder_parked');
+  } catch (e) {}
+
+  const spotName = state.parkedLocation ? (state.parkedLocation.spotLabel || 'Golf Cart') : 'Golf Cart';
+  el.arrivalSpotName.textContent = `Back at ${spotName}! Location forgotten.`;
   el.arrivalCard.classList.remove('hidden');
 
-  // Trigger device vibration on Android (iOS ignores vibration via Web API)
+  // Trigger device vibration
   if ('vibrate' in navigator) {
     try {
       navigator.vibrate([150, 80, 200, 80, 300]);
     } catch (e) {}
   }
 
-  // Play pleasant arrival chime (works on both iPhone & Android)
+  // Play pleasant arrival chime
   playArrivalChime();
+
+  // Automatically reset map & bottom card after 5 seconds of arrival celebration
+  clearTimeout(state.autoForgetTimer);
+  state.autoForgetTimer = setTimeout(() => {
+    forgetParkedLocation(false);
+  }, 5000);
 }
 
 function hideArrival() {
@@ -531,7 +549,7 @@ function updateExternalNavLinks(lat, lng) {
   }
 }
 
-// --- Parking Spot Management & Persistence ---
+// --- Parking Spot Management & Single-Session Persistence ---
 function loadSavedParkedLocation() {
   const saved = localStorage.getItem('cartfinder_parked');
   if (saved) {
@@ -577,7 +595,6 @@ function applyParkedLocation(parked) {
 }
 
 function openParkModal() {
-  // Capture current position or provide fallback
   let lat = 36.5688;
   let lng = -121.9506;
   let acc = 10;
@@ -620,17 +637,12 @@ function saveParkedSpot() {
     note
   };
 
-  // Save to localStorage
+  // Only store the current active location for recovery if phone reboots or browser closes
   localStorage.setItem('cartfinder_parked', JSON.stringify(newSpot));
-
-  // Add to history
-  state.history.unshift(newSpot);
-  if (state.history.length > 10) state.history.pop();
-  localStorage.setItem('cartfinder_history', JSON.stringify(state.history));
 
   applyParkedLocation(newSpot);
   closeParkModal();
-  showToast(`Golf Cart parked at "${label}"!`);
+  showToast(`Spot marked! Saved until you return to your cart.`);
 
   // Haptic feedback
   if ('vibrate' in navigator) {
@@ -638,11 +650,17 @@ function saveParkedSpot() {
   }
 }
 
-function clearParkedSpot() {
-  if (!confirm('Clear your parked golf cart location?')) return;
+// Forgets and completely clears the parked spot
+function forgetParkedLocation(showToastMsg = true) {
+  clearTimeout(state.autoForgetTimer);
+  state.autoForgetTimer = null;
 
-  localStorage.removeItem('cartfinder_parked');
+  try {
+    localStorage.removeItem('cartfinder_parked');
+  } catch (e) {}
+
   state.parkedLocation = null;
+  state.hasArrived = false;
 
   if (cartMarker && map && map.hasLayer(cartMarker)) {
     map.removeLayer(cartMarker);
@@ -656,7 +674,14 @@ function clearParkedSpot() {
   hideArrival();
   showNotParkedView();
 
-  showToast('Parked spot cleared');
+  if (showToastMsg) {
+    showToast('Spot forgotten. Ready for your next round!');
+  }
+}
+
+function clearParkedSpot() {
+  if (!confirm('Forget this parked golf cart location?')) return;
+  forgetParkedLocation(true);
 }
 
 function showNotParkedView() {
@@ -748,7 +773,6 @@ function setUnit(unit) {
 
 function updateUnitDisplay() {
   el.unitLabel.textContent = state.preferredUnit;
-  // Update buttons in options menu
   document.querySelectorAll('.unit-opt-btn').forEach(btn => {
     if (btn.dataset.unit === state.preferredUnit) {
       btn.classList.add('active');
@@ -773,28 +797,26 @@ function startDemoMode() {
   el.demoToggleTitle.textContent = 'Stop Demo Simulation';
   closeMenu();
 
-  // Pick a base location (current or Pebble Beach)
   const baseLat = state.currentLocation ? state.currentLocation.lat : 36.5688;
   const baseLng = state.currentLocation ? state.currentLocation.lng : -121.9506;
 
-  // Set parked cart ~75 yards North-East
+  // Set parked cart ~75 yards away
   const demoCart = {
     id: 'demo-cart',
     lat: baseLat + 0.00062,
     lng: baseLng + 0.00055,
     accuracy: 3.5,
-    timestamp: Date.now() - (15 * 60 * 1000), // 15 mins ago
-    spotLabel: 'Cart #42 (Hole 9 Turn)',
-    note: 'Demo simulation — parked by clubhouse practice green'
+    timestamp: Date.now() - (15 * 60 * 1000),
+    spotLabel: 'Cart #42 (Clubhouse Turn)',
+    note: 'Demo simulation — testing auto-forget on arrival'
   };
 
   applyParkedLocation(demoCart);
 
-  // Set user start location
   let currentSimLat = baseLat;
   let currentSimLng = baseLng;
   let step = 0;
-  const totalSteps = 12;
+  const totalSteps = 8;
 
   state.currentLocation = {
     lat: currentSimLat,
@@ -808,13 +830,11 @@ function startDemoMode() {
   fitBothOnMap();
   showToast('Demo simulation started: Simulating walk to cart');
 
-  // Interval simulating walking toward cart step-by-step
   clearInterval(state.demoTimer);
   state.demoTimer = setInterval(() => {
     step++;
     const progress = Math.min(step / totalSteps, 1.0);
 
-    // Interpolate lat/lng closer to cart
     currentSimLat = baseLat + (demoCart.lat - baseLat) * progress;
     currentSimLng = baseLng + (demoCart.lng - baseLng) * progress;
 
@@ -833,9 +853,9 @@ function startDemoMode() {
 
     if (step >= totalSteps) {
       clearInterval(state.demoTimer);
-      showToast('Simulation complete: Arrived at Golf Cart!');
+      showToast('Arrived at cart! Location automatically forgotten.');
     }
-  }, 2000);
+  }, 1800);
 }
 
 function exitDemoMode() {
@@ -847,34 +867,6 @@ function exitDemoMode() {
   startGpsTracking();
 }
 
-// --- History View ---
-function renderHistory() {
-  if (!state.history || state.history.length === 0) {
-    el.historyList.innerHTML = '<p class="empty-hint">No past parked spots yet.</p>';
-    return;
-  }
-
-  el.historyList.innerHTML = state.history.map(item => `
-    <div class="history-item">
-      <div>
-        <div class="history-item-label">${escapeHtml(item.spotLabel || 'Golf Cart')}</div>
-        <div class="history-item-date">${new Date(item.timestamp).toLocaleDateString()} &bull; ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-      </div>
-      <button class="restore-btn" onclick="restoreHistorySpot('${item.id}')">Restore</button>
-    </div>
-  `).join('');
-}
-
-window.restoreHistorySpot = function(id) {
-  const found = state.history.find(h => h.id === id);
-  if (found) {
-    localStorage.setItem('cartfinder_parked', JSON.stringify(found));
-    applyParkedLocation(found);
-    closeMenu();
-    showToast(`Restored spot: ${found.spotLabel}`);
-  }
-};
-
 // --- Utilities & Formatters ---
 function formatTimeAgo(timestamp) {
   if (!timestamp) return 'Just now';
@@ -885,16 +877,6 @@ function formatTimeAgo(timestamp) {
   const diffHr = Math.floor(diffMin / 60);
   if (diffHr < 24) return `${diffHr}h ago`;
   return `${Math.floor(diffHr / 24)}d ago`;
-}
-
-function escapeHtml(str) {
-  return str.replace(/[&<>'"]/g, tag => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[tag] || tag));
 }
 
 function showToast(msg) {
@@ -924,6 +906,13 @@ function bindEvents() {
   el.updateSpotBtn.addEventListener('click', openParkModal);
   el.clearSpotBtn.addEventListener('click', clearParkedSpot);
 
+  // Arrival Card Dismiss button: immediately clear and forget
+  if (el.dismissArrivalBtn) {
+    el.dismissArrivalBtn.addEventListener('click', () => {
+      forgetParkedLocation(true);
+    });
+  }
+
   // Modal Buttons
   el.closeModalBtn.addEventListener('click', closeParkModal);
   el.cancelParkBtn.addEventListener('click', closeParkModal);
@@ -938,9 +927,8 @@ function bindEvents() {
     });
   });
 
-  // Menu Modal
+  // Settings & Options Modal
   el.menuBtn.addEventListener('click', () => {
-    renderHistory();
     el.menuModal.classList.remove('hidden');
   });
   el.closeMenuBtn.addEventListener('click', closeMenu);

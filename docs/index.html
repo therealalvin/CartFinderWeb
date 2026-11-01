@@ -138,17 +138,21 @@
         </div>
       </section>
 
-      <!-- Arrival Card (Shown when < 12 yards away) -->
+      <!-- Arrival Card (Shown when <= 10m / ~11yd away) -->
       <div id="arrival-card" class="arrival-card card hidden">
         <div class="arrival-content">
           <div class="arrival-icon-wrap">
             <span class="material-symbols-outlined">check_circle</span>
           </div>
           <div class="arrival-text">
-            <h3>You've Reached Your Cart!</h3>
-            <p id="arrival-spot-name">Parked at Clubhouse</p>
+            <h3>You've Reached Your Cart! 🎉</h3>
+            <p id="arrival-spot-name">Location forgotten. Ready for your next spot.</p>
           </div>
         </div>
+        <button id="dismiss-arrival-btn" class="arrival-dismiss-btn">
+          <span class="material-symbols-outlined">delete_sweep</span>
+          <span>I'm Here — Clear & Ready for Next Spot</span>
+        </button>
       </div>
 
       <!-- Bottom Card: Park Status & Action Bar -->
@@ -233,11 +237,11 @@
       </div>
     </div>
 
-    <!-- Modal: Menu / Settings / History -->
+    <!-- Modal: Settings & Options -->
     <div id="menu-modal" class="modal-overlay hidden">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>Options & History</h3>
+          <h3>Settings & Options</h3>
           <button id="close-menu-btn" class="icon-btn">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -270,16 +274,16 @@
               <span class="material-symbols-outlined">sports_esports</span>
               <div class="btn-text-col">
                 <strong id="demo-toggle-title">Start Demo Simulation</strong>
-                <small>Test navigation & arrival indoors</small>
+                <small>Test navigation & auto-forget arrival indoors</small>
               </div>
             </button>
           </div>
 
           <div class="menu-section">
-            <h4>Recent Parked History</h4>
-            <div id="history-list" class="history-list">
-              <p class="empty-hint">No past parked spots yet.</p>
-            </div>
+            <h4>Privacy & Transient Storage</h4>
+            <p class="hint-text">
+              <strong>Zero Tracking History:</strong> We do not log or save past locations. Your parked spot is held only in case you close the browser or reboot your phone, and is automatically forgotten the moment you get back to your cart.
+            </p>
           </div>
 
           <div class="menu-section">
