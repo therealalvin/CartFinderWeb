@@ -41,6 +41,5 @@
 - 📏 **Customizable Units**: Toggle between **Yards** (golf standard), **Meters**, and **Feet**.
 - 🎉 **Proximity Arrival Alerts**: Automatically triggers when you are within 10 meters / 11 yards of your cart, with synthesized musical chime and haptic vibration feedback.
 - 🗺️ **Turn-by-Turn Deep Links**: Direct one-tap buttons to open walking directions in **Apple Maps** (on iPhone) or **Google Maps** (on Android).
-- 📜 **Spot History**: View and restore recent parked locations.
 - 🎮 **Demo / Simulation Mode**: Built-in simulator to test walking, distance countdown, compass needle, and arrival fanfare indoors or on a computer without having to be at a golf course.
 - 📴 **Offline Ready (PWA)**: Includes Service Worker (`sw.js`) and Web App Manifest (`manifest.json`) for instant loading even in poor reception areas on the golf course.
